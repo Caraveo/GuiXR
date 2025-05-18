@@ -15,9 +15,15 @@ class MinimalGUI(Gtk.Window):
     def __init__(self):
         Gtk.Window.__init__(self, title="Minimal GUI")
         self.set_decorated(False)
-        self.set_keep_above(True)
+        self.set_keep_above(True)  # Keep window above others
         self.set_size_request(800, 40)
-        self.set_position(Gtk.WindowPosition.TOP)
+        self.set_position(Gtk.WindowPosition.NONE)
+
+        # Position at the top of the screen
+        screen = Gdk.Screen.get_default()
+        monitor = screen.get_primary_monitor()
+        geometry = screen.get_monitor_geometry(monitor)
+        self.move(geometry.width // 2 - 400, 10)  # Center horizontally, 10px from top
 
         # Make window transparent
         screen = self.get_screen()
@@ -51,13 +57,6 @@ class MinimalGUI(Gtk.Window):
         self.ai_orb = Gtk.Image()
         self.main_box.pack_end(self.ai_orb, False, False, 0)
 
-        # Settings button
-        settings_button = Gtk.Button()
-        settings_icon = Gtk.Image.new_from_icon_name("preferences-system", Gtk.IconSize.MENU)
-        settings_button.set_image(settings_icon)
-        settings_button.connect("clicked", self.show_settings)
-        self.main_box.pack_end(settings_button, False, False, 0)
-
         # Initialize components
         self.update_date_time()
         self.update_weather()
@@ -73,19 +72,63 @@ class MinimalGUI(Gtk.Window):
         self.connect("destroy", Gtk.main_quit)
 
         # Background settings
-        self.bg_color = [1, 1, 1, 0.5]  # RGBA: white with 50% transparency
+        self.bg_color = [0.2, 0.2, 0.25, 0.85]  # RGBA: dark blue-gray with 85% opacity
 
     def on_draw(self, widget, cr):
-        cr.set_source_rgba(*self.bg_color)
-        cr.set_operator(cairo.OPERATOR_SOURCE)
-        cr.paint()
-        cr.set_operator(cairo.OPERATOR_OVER)
+        try:
+            # Clear the surface with transparency
+            cr.set_operator(cairo.OPERATOR_CLEAR)
+            cr.paint()
+            cr.set_operator(cairo.OPERATOR_OVER)
+
+            # Get the dimensions of the window
+            width = self.get_allocated_width()
+            height = self.get_allocated_height()
+
+            # Set the background color
+            cr.set_source_rgba(*self.bg_color)
+
+            # Create rounded rectangle
+            radius = height / 2  # Full rounded edges on top and bottom
+            degrees = 3.14159 / 180.0
+
+            # Draw the rounded rectangle
+            cr.new_sub_path()
+            cr.arc(width - radius, radius, radius, -90 * degrees, 0)
+            cr.arc(width - radius, height - radius, radius, 0, 90 * degrees)
+            cr.arc(radius, height - radius, radius, 90 * degrees, 180 * degrees)
+            cr.arc(radius, radius, radius, 180 * degrees, 270 * degrees)
+            cr.close_path()
+
+            # Add a subtle shadow
+            cr.save()
+            cr.set_source_rgba(0, 0, 0, 0.3)
+            cr.set_line_width(1)
+            cr.translate(0, 2)  # Offset for shadow
+            cr.arc(width - radius, radius, radius, -90 * degrees, 0)
+            cr.arc(width - radius, height - radius, radius, 0, 90 * degrees)
+            cr.arc(radius, height - radius, radius, 90 * degrees, 180 * degrees)
+            cr.arc(radius, radius, radius, 180 * degrees, 270 * degrees)
+            cr.close_path()
+            cr.fill()
+            cr.restore()
+
+            # Fill the rounded rectangle with main color
+            cr.set_source_rgba(*self.bg_color)
+            cr.arc(width - radius, radius, radius, -90 * degrees, 0)
+            cr.arc(width - radius, height - radius, radius, 0, 90 * degrees)
+            cr.arc(radius, height - radius, radius, 90 * degrees, 180 * degrees)
+            cr.arc(radius, radius, radius, 180 * degrees, 270 * degrees)
+            cr.close_path()
+            cr.fill()
+        except Exception as e:
+            print(f"Error in on_draw: {e}")
         return False
 
     def update_date_time(self):
         now = datetime.datetime.now()
         date_str = now.strftime("%A, %B %d %I:%M%p")
-        self.date_label.set_markup(f"<span color='white' font='12'>{date_str}</span>")
+        self.date_label.set_markup(f"<span color='white' font='12' weight='bold'>{date_str}</span>")
         return True
 
     def update_weather(self):
@@ -93,90 +136,119 @@ class MinimalGUI(Gtk.Window):
         # For demo purposes, we'll just use a sunny icon
         try:
             # Replace with actual API call
-            weather_condition = "sunny"
-            icon_name = "weather-clear"
+            icon_name = "weather-clear-symbolic"  # Using symbolic icon for better visibility on dark background
 
             # Set the weather icon
             self.weather_icon.set_from_icon_name(icon_name, Gtk.IconSize.LARGE_TOOLBAR)
+
+            # Apply CSS to make the icon white
+            style_context = self.weather_icon.get_style_context()
+            style_provider = Gtk.CssProvider()
+            css = b"""
+            image {
+                color: white;
+            }
+            """
+            style_provider.load_from_data(css)
+            style_context.add_provider(style_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
         except Exception as e:
             print(f"Weather update error: {e}")
         return True
 
     def create_orb_pixbuf(self, size=24):
-        # Create a pulsing orb animation frame
-        surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, size)
-        cr = cairo.Context(surface)
+        try:
+            # Create a pulsing orb animation frame
+            surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, size)
+            cr = cairo.Context(surface)
 
-        # Animation based on time
-        pulse = (time.time() % 2) / 2  # 0 to 1 over 2 seconds
-        radius = size/2 * (0.8 + 0.2 * pulse)
+            # Animation based on time
+            pulse = (time.time() % 2) / 2  # 0 to 1 over 2 seconds
+            radius = size/2 * (0.8 + 0.2 * pulse)
 
-        # Draw orb
-        cr.set_source_rgba(0.2, 0.6, 1.0, 0.8)  # Blue with transparency
-        cr.arc(size/2, size/2, radius, 0, 2 * 3.14159)
-        cr.fill()
+            # Draw orb with gradient
+            pattern = cairo.RadialGradient(size/2, size/2, radius * 0.5, size/2, size/2, radius)
+            pattern.add_color_stop_rgba(0, 0.4, 0.8, 1.0, 1.0)  # Bright blue center
+            pattern.add_color_stop_rgba(1, 0.1, 0.4, 0.8, 0.8)  # Darker blue edge
 
-        # Convert to pixbuf
-        pixbuf = Gdk.pixbuf_get_from_surface(surface, 0, 0, size, size)
-        return pixbuf
+            cr.set_source(pattern)
+            cr.arc(size/2, size/2, radius, 0, 2 * 3.14159)
+            cr.fill()
+
+            # Add a highlight
+            cr.set_source_rgba(1, 1, 1, 0.4)
+            cr.arc(size/2 - radius * 0.3, size/2 - radius * 0.3, radius * 0.2, 0, 2 * 3.14159)
+            cr.fill()
+
+            # Convert to pixbuf
+            pixbuf = Gdk.pixbuf_get_from_surface(surface, 0, 0, size, size)
+            return pixbuf
+        except Exception as e:
+            print(f"Error creating orb pixbuf: {e}")
+            # Create a fallback pixbuf
+            pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, size, size)
+            pixbuf.fill(0x3399FF80)  # RGBA: light blue with transparency
+            return pixbuf
 
     def update_ai_orb(self):
         self.ai_orb.set_from_pixbuf(self.create_orb_pixbuf())
         return True
 
-    def show_settings(self, button):
-        dialog = SettingsDialog(self)
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            # Update background color
-            r = dialog.r_scale.get_value() / 100
-            g = dialog.g_scale.get_value() / 100
-            b = dialog.b_scale.get_value() / 100
-            a = dialog.a_scale.get_value() / 100
-            self.bg_color = [r, g, b, a]
-            self.queue_draw()
-        dialog.destroy()
 
-class SettingsDialog(Gtk.Dialog):
-    def __init__(self, parent):
-        Gtk.Dialog.__init__(self, title="Settings", transient_for=parent, flags=0)
-        self.add_buttons(
-            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_OK, Gtk.ResponseType.OK
-        )
-
-        self.set_default_size(300, 200)
-
-        box = self.get_content_area()
-
-        # Color settings
-        color_frame = Gtk.Frame(label="Background Color")
-        color_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        color_frame.add(color_box)
-
-        # RGB sliders
-        self.r_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
-        self.r_scale.set_value(parent.bg_color[0] * 100)
-        self.g_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
-        self.g_scale.set_value(parent.bg_color[1] * 100)
-        self.b_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
-        self.b_scale.set_value(parent.bg_color[2] * 100)
-        self.a_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
-        self.a_scale.set_value(parent.bg_color[3] * 100)
-
-        color_box.pack_start(Gtk.Label("Red"), False, False, 0)
-        color_box.pack_start(self.r_scale, False, False, 0)
-        color_box.pack_start(Gtk.Label("Green"), False, False, 0)
-        color_box.pack_start(self.g_scale, False, False, 0)
-        color_box.pack_start(Gtk.Label("Blue"), False, False, 0)
-        color_box.pack_start(self.b_scale, False, False, 0)
-        color_box.pack_start(Gtk.Label("Transparency"), False, False, 0)
-        color_box.pack_start(self.a_scale, False, False, 0)
-
-        box.pack_start(color_frame, True, True, 10)
-        self.show_all()
 
 if __name__ == "__main__":
-    win = MinimalGUI()
-    win.show_all()
-    Gtk.main()
+    import sys
+    import platform
+
+    # Check for macOS and XQuartz
+    if platform.system() == 'Darwin':
+        import subprocess
+        import os
+
+        # Check if XQuartz is installed
+        xquartz_app = '/Applications/Utilities/XQuartz.app'
+        if not os.path.exists(xquartz_app):
+            print("Error: XQuartz is not installed. GTK applications on macOS require XQuartz.")
+            print("Please install XQuartz from https://www.xquartz.org/")
+            sys.exit(1)
+
+        # Check if XQuartz is running
+        try:
+            result = subprocess.run(['pgrep', 'XQuartz'], capture_output=True, text=True)
+            if result.returncode != 0:
+                print("Warning: XQuartz is installed but not running.")
+                print("Please start XQuartz before running this application.")
+                print("You can start it by running: open /Applications/Utilities/XQuartz.app")
+                # Attempt to start XQuartz
+                try:
+                    subprocess.run(['open', xquartz_app])
+                    print("Attempting to start XQuartz for you...")
+                    # Give XQuartz time to start
+                    import time
+                    time.sleep(3)
+                except Exception as e:
+                    print(f"Failed to start XQuartz: {e}")
+                    sys.exit(1)
+        except Exception as e:
+            print(f"Error checking XQuartz status: {e}")
+
+    # Check if GTK can be initialized
+    success, argv = Gtk.init_check(None)
+    if not success:
+        print("Error: GTK could not be initialized. Check your display settings.")
+        print("If you're running this on a remote system, make sure X11 forwarding is enabled.")
+        print("If you're on macOS, make sure XQuartz is installed and running.")
+        sys.exit(1)
+
+    # Set environment variables that might help with GTK on macOS
+    if platform.system() == 'Darwin':
+        os.environ['GDK_BACKEND'] = 'x11'
+
+    # If initialization was successful, proceed
+    try:
+        win = MinimalGUI()
+        win.show_all()
+        Gtk.main()
+    except Exception as e:
+        print(f"Error running the application: {e}")
+        sys.exit(1)
