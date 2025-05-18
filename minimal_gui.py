@@ -88,8 +88,8 @@ class MinimalGUI(Gtk.Window):
             # Set the background color
             cr.set_source_rgba(*self.bg_color)
 
-            # Create rounded rectangle
-            radius = height / 2  # Full rounded edges on top and bottom
+            # Create moderately rounded rectangle
+            radius = height / 4  # Half as rounded as before
             degrees = 3.14159 / 180.0
 
             # Draw the rounded rectangle
